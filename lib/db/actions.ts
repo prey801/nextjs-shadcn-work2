@@ -1,6 +1,6 @@
 import { db } from "./index";
 import { items, vendingMachines, slots, orders, orderItems } from "./schema";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 export async function getItems() {
@@ -45,10 +45,10 @@ export async function getMachineSlots(machineId: string) {
 
 export async function createOrder(
   machineId: string,
-  orderItems: Array<{ itemId: string; quantity: number; price: number }>,
+  items: Array<{ itemId: string; quantity: number; price: number }>,
 ) {
   const orderId = nanoid();
-  const total = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   await db.transaction(async (tx) => {
     // Create order
@@ -59,18 +59,16 @@ export async function createOrder(
     });
 
     // Create order items
-    await tx.insert(orderItems).values(
-      orderItems.map((item) => ({
+    for (const item of items) {
+      await tx.insert(orderItems).values({
         id: nanoid(),
         orderId,
         itemId: item.itemId,
         quantity: item.quantity,
         price: item.price,
-      })),
-    );
+      });
 
-    // Update slot quantities
-    for (const item of orderItems) {
+      // Update slot quantities
       await tx
         .update(slots)
         .set({
